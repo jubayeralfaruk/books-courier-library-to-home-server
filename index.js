@@ -1,69 +1,42 @@
 const express = require("express");
 const cors = require("cors");
-const {
-  MongoClient,
-  ServerApiVersion,
-  ObjectId,
-  CursorTimeoutMode,
-} = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
-
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY); // Add in .env file
-
-const app = express();
-const port = process.env.PORT || 5000;
-
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const crypto = require("crypto");
-
 const admin = require("firebase-admin");
 
-// const serviceAccount = require("./books-courier-firebase-adminsdk.json");
-
-const serviceAccount = JSON.parse(
-  process.env.FIREBASE_SERVICE_ACCOUNT
-);
+// Firebase initialization
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-console.log(
-  "Firebase ENV loaded:",
-  !!process.env.FIREBASE_SERVICE_ACCOUNT
-);
-
+console.log("Firebase ENV loaded:", !!process.env.FIREBASE_SERVICE_ACCOUNT);
 
 function generateTrackingId() {
   const prefix = "BC";
-
-  // Format date: YYYYMMDD
   const now = new Date();
   const date =
     now.getFullYear().toString() +
     String(now.getMonth() + 1).padStart(2, "0") +
     String(now.getDate()).padStart(2, "0");
-
-  // Generate strong random hex string (4 bytes → 8 chars)
   const randomHex = crypto.randomBytes(4).toString("hex").toUpperCase();
-
   return `${prefix}-${date}-${randomHex}`;
 }
 
 // Middleware
+const app = express();
 app.use(cors());
 app.use(express.json());
 
 const verifyFBToken = async (req, res, next) => {
   const token = req.headers.authorization;
-  if (!token) {
-    return res.status(401).send({ message: "Unauthorized access" });
-  }
-
+  if (!token) return res.status(401).send({ message: "Unauthorized access" });
   try {
     const idToken = token.split(" ")[1];
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     req.decodedEmail = decodedToken.email;
-
-    console.log("decoded token:", decodedToken.email);
     next();
   } catch (error) {
     return res.status(401).send({ message: "Unauthorized access" });
@@ -71,14 +44,9 @@ const verifyFBToken = async (req, res, next) => {
 };
 
 // MongoDB connection
-const uri = process.env.MONGO_URI; // Add in .env file
-
+const uri = process.env.MONGO_URI;
 const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  },
+  serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
 });
 
 async function run() {
@@ -95,18 +63,13 @@ async function run() {
     console.log("Connected to MongoDB");
 
     const verifyAdmin = async (req, res, next) => {
-      const email = req.decoded_email;
-      const query = { email };
-      const user = await usersCollection.findOne(query);
-
-      if (!user || user.role !== "admin") {
-        return res.status(403).send({ message: "forbidden access" });
-      }
-
+      const email = req.decodedEmail; // fixed mismatch
+      const user = await usersCollection.findOne({ email });
+      if (!user || user.role !== "admin") return res.status(403).send({ message: "Forbidden access" });
       next();
     };
 
-    // user data routes
+    // Users routes
     app.get("/users", verifyFBToken, async (req, res) => {
       const searchText = req.query.searchText;
       const query = {};
@@ -123,44 +86,41 @@ async function run() {
     app.post("/users", async (req, res) => {
       const user = req.body;
       const userExists = await usersCollection.findOne({ email: user.email });
-      if (userExists) {
-        return res.send({ exists: true, user: `userExists-${userExists}` });
-      }
-      user.role = "user"; // default role
+      if (userExists) return res.send({ exists: true, user: `userExists-${userExists}` });
+      user.role = "user";
       user.createdAt = new Date();
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
+
     app.get("/users/:id", async (req, res) => {
       const id = req.params.id;
-      const users = await usersCollection.findOne({ _id: new ObjectId(id) });
-      res.send(users);
+      const user = await usersCollection.findOne({ _id: new ObjectId(id) });
+      res.send(user);
     });
+
     app.delete("/users/:id", async (req, res) => {
       const id = req.params.id;
-      const users = await usersCollection.deleteOne({ _id: new ObjectId(id) });
-      res.send(users);
+      const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
+      res.send(result);
     });
+
     app.patch("/users/:id", verifyFBToken, async (req, res) => {
       const id = req.params.id;
       const updatedUser = req.body;
-      const result = await usersCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: updatedUser }
-      );
+      const result = await usersCollection.updateOne({ _id: new ObjectId(id) }, { $set: updatedUser });
       res.send(result);
     });
+
     app.get("/users/:email/role", async (req, res) => {
       const email = req.params.email;
       const user = await usersCollection.findOne({ email });
-      res.send({
-        role: user?.role || "user",
-      });
+      res.send({ role: user?.role || "user" });
     });
 
+    // Books routes
     app.post("/books", async (req, res) => {
       const book = req.body;
-
       const result = await booksCollection.insertOne(book);
       res.send(result);
     });
@@ -168,48 +128,45 @@ async function run() {
     app.get("/books", async (req, res) => {
       const seller_email = req.query.seller_email;
       const query = {};
-      if (seller_email) {
-        query.seller_email = seller_email;
-      }
-      const books = await booksCollection
-        .find(query)
-        .sort({ createdAt: -1 })
-        .toArray();
+      if (seller_email) query.seller_email = seller_email;
+      const books = await booksCollection.find(query).sort({ createdAt: -1 }).toArray();
       res.send(books);
     });
+
     app.get("/books/:id", async (req, res) => {
       const id = req.params.id;
       const book = await booksCollection.findOne({ _id: new ObjectId(id) });
       res.send(book);
     });
+
     app.patch("/books/:id", async (req, res) => {
       const id = req.params.id;
       const updatedBook = req.body;
-      const result = await booksCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: updatedBook }
-      );
+      const result = await booksCollection.updateOne({ _id: new ObjectId(id) }, { $set: updatedBook });
       res.send(result);
     });
+
     app.delete("/books/:id", async (req, res) => {
       const id = req.params.id;
       const result = await booksCollection.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
     });
 
+    // Orders routes
     app.post("/orders", async (req, res) => {
       const order = req.body;
       const result = await ordersCollection.insertOne(order);
       res.send(result);
     });
+
     app.get("/orders", verifyFBToken, async (req, res) => {
       const email = req.query.email;
       const query = {};
       if (email) {
         query.email = email;
+        if (req.decodedEmail !== email) return res.status(403).send({ message: "Forbidden access" });
       }
-      const options = { sort: { orderDate: -1 } };
-      const orders = await ordersCollection.find(query, options).toArray();
+      const orders = await ordersCollection.find(query).sort({ orderDate: -1 }).toArray();
       res.send(orders);
     });
 
@@ -222,35 +179,21 @@ async function run() {
     app.patch("/orders/:id", async (req, res) => {
       const id = req.params.id;
       const updatedOrder = req.body;
-      const result = await ordersCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: updatedOrder }
-      );
+      const result = await ordersCollection.updateOne({ _id: new ObjectId(id) }, { $set: updatedOrder });
       res.send(result);
     });
 
     app.delete("/orders/:id", async (req, res) => {
       const id = req.params.id;
-      const result = await ordersCollection.deleteOne({
-        _id: new ObjectId(id),
-      });
+      const result = await ordersCollection.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
     });
 
-    // seller orders (search + status filter)
+    // Seller Orders
     app.get("/seller-orders", async (req, res) => {
       const { search, status } = req.query;
-      const query = {};
-
-      // ❌ canceled order hide
-      query.status = { $ne: "cancelled" };
-
-      // status filter
-      if (status && status !== "all") {
-        query.status = status;
-      }
-
-      // search filter
+      const query = { status: { $ne: "cancelled" } };
+      if (status && status !== "all") query.status = status;
       if (search) {
         query.$or = [
           { productName: { $regex: search, $options: "i" } },
@@ -258,29 +201,19 @@ async function run() {
           { orderId: { $regex: search, $options: "i" } },
         ];
       }
-
-      const orders = await ordersCollection
-        .find(query)
-        .sort({ createdAt: -1 })
-        .toArray();
-
+      const orders = await ordersCollection.find(query).sort({ createdAt: -1 }).toArray();
       res.send(orders);
     });
 
+    // Payments
     app.get("/payments", verifyFBToken, async (req, res) => {
       const email = req.query.email;
       const query = {};
       if (email) {
         query.customerEmail = email;
-        // checking email from decoded token
-        if (req.decodedEmail !== email) {
-          return res.status(403).send({ message: "Forbidden access" });
-        }
+        if (req.decodedEmail !== email) return res.status(403).send({ message: "Forbidden access" });
       }
-      const payments = await paymentsCollection
-        .find(query)
-        .sort({ paymentDate: -1 })
-        .toArray();
+      const payments = await paymentsCollection.find(query).sort({ paymentDate: -1 }).toArray();
       res.send(payments);
     });
 
@@ -291,9 +224,7 @@ async function run() {
           {
             price_data: {
               currency: "bdt",
-              product_data: {
-                name: `Order Payment for this book: ${paymentInfo.bookTitle}`,
-              },
+              product_data: { name: `Order Payment for this book: ${paymentInfo.bookTitle}` },
               unit_amount: paymentInfo.amount * 100,
             },
             quantity: 1,
@@ -310,41 +241,22 @@ async function run() {
         success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
       });
-
-      console.log(session);
       res.send({ url: session.url });
     });
 
     app.patch("/payment-success", async (req, res) => {
       const sessionId = req.query.session_id;
       const session = await stripe.checkout.sessions.retrieve(sessionId);
-      console.log(session);
-
       const transactionId = session.payment_intent;
-      const query = { transactionId: transactionId };
-      const existingPayment = await paymentsCollection.findOne(query);
+
+      const existingPayment = await paymentsCollection.findOne({ transactionId });
       if (existingPayment) {
-        return res.send({
-          success: true,
-          message: "Payment already recorded",
-          trackingId: existingPayment.trackingId,
-          transactionId,
-        });
+        return res.send({ success: true, message: "Payment already recorded", trackingId: existingPayment.trackingId, transactionId });
       }
 
-      const trackingId = generateTrackingId();
-
       if (session.payment_status === "paid") {
-        const orderId = session.metadata.orderId;
-        const query = { _id: new ObjectId(orderId) };
-        const updateDoc = {
-          $set: {
-            paymentStatus: "paid",
-            trackingId: trackingId,
-          },
-        };
-        const result = await ordersCollection.updateOne(query, updateDoc);
-
+        const trackingId = generateTrackingId();
+        await ordersCollection.updateOne({ _id: new ObjectId(session.metadata.orderId) }, { $set: { paymentStatus: "paid", trackingId } });
         const payment = {
           amount: session.amount_total / 100,
           currency: session.currency,
@@ -353,60 +265,41 @@ async function run() {
           orderId: session.metadata.orderId,
           booksId: session.metadata.booksId,
           bookTitle: session.metadata.bookTitle,
-          transactionId: session.payment_intent,
+          transactionId,
           paymentStatus: session.payment_status,
-          trackingId: trackingId,
+          trackingId,
           paymentDate: new Date(),
         };
-
-        if (session.payment_status === "paid") {
-          const paymentResult = await paymentsCollection.insertOne(payment);
-          console.log("Payment record inserted:", paymentResult);
-
-          res.send({
-            success: true,
-            trackingId: trackingId,
-            transactionId: session.payment_intent,
-            modifyBookResult: result,
-            paymentInfo: paymentResult,
-          });
-        }
+        const paymentResult = await paymentsCollection.insertOne(payment);
+        res.send({ success: true, trackingId, transactionId, paymentInfo: paymentResult });
       } else {
         res.status(400).send({ message: "Payment not completed" });
       }
     });
 
+    // Sellers
     app.get("/sellers", verifyFBToken, async (req, res) => {
       const query = {};
-      if (req.query.status) {
-        query.status = req.query.status;
-      }
-      if (req.query.email) {
-        query.email = req.query.email;
-      }
+      if (req.query.status) query.status = req.query.status;
+      if (req.query.email) query.email = req.query.email;
       const sellers = await sellersCollection.find(query).toArray();
       res.send(sellers);
     });
+
     app.post("/sellers", async (req, res) => {
       const seller = req.body;
       seller.createdAt = new Date();
-      seller.status = "pending"; // default status
+      seller.status = "pending";
       const result = await sellersCollection.insertOne(seller);
       res.send(result);
     });
+
     app.patch("/sellers/:id", async (req, res) => {
       const id = req.params.id;
       const updatedSeller = req.body;
-      const result = await sellersCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: updatedSeller }
-      );
+      const result = await sellersCollection.updateOne({ _id: new ObjectId(id) }, { $set: updatedSeller });
       if (updatedSeller.status === "approved") {
-        const email = updatedSeller.email;
-        const user = await usersCollection.updateOne(
-          { email: email },
-          { $set: { role: "seller" } }
-        );
+        await usersCollection.updateOne({ email: updatedSeller.email }, { $set: { role: "seller" } });
       }
       res.send(result);
     });
@@ -414,15 +307,14 @@ async function run() {
     console.error(error);
   }
 }
+
 run().catch(console.dir);
 
-// Sample GET route
 app.get("/", (req, res) => {
   res.send("Server Running Successfully 🎉");
 });
 
-// Start server
-// app.listen(port, () => {
-//   console.log(`Server running on port ${port}`);
-// });
+const port = process.env.PORT || 5000;
+app.listen(port, () => console.log(`Server running on port ${port}`));
+
 module.exports = app;
