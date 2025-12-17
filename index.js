@@ -17,7 +17,21 @@ const crypto = require("crypto");
 
 const admin = require("firebase-admin");
 
-const serviceAccount = require("./books-courier-firebase-adminsdk.json");
+// const serviceAccount = require("./books-courier-firebase-adminsdk.json");
+
+const serviceAccount = JSON.parse(
+  process.env.FIREBASE_SERVICE_ACCOUNT
+);
+
+console.log(
+  "Firebase ENV loaded:",
+  !!process.env.FIREBASE_SERVICE_ACCOUNT
+);
+
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -430,6 +444,7 @@ app.get("/", (req, res) => {
 });
 
 // Start server
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+// app.listen(port, () => {
+//   console.log(`Server running on port ${port}`);
+// });
+module.exports = app;
