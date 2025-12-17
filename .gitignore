@@ -1,0 +1,6 @@
+node_modules/
+.env
+dist/
+build/node_modules/
+*.json
+repo.bundle
