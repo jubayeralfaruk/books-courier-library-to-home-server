@@ -1,6 +1,15 @@
+# Dependencies
 node_modules/
+
+# Environment variables
 .env
+
+# Build output
 dist/
-build/node_modules/
-*.json
+
+# Firebase Admin SDK (PRIVATE – never commit)
+books-courier-firebase-adminsdk.json
+*-firebase-adminsdk.json
+
+# Backup / bundle files
 repo.bundle
