@@ -22,20 +22,15 @@ const admin = require("firebase-admin");
 const serviceAccount = JSON.parse(
   process.env.FIREBASE_SERVICE_ACCOUNT
 );
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 console.log(
   "Firebase ENV loaded:",
   !!process.env.FIREBASE_SERVICE_ACCOUNT
 );
 
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
 
 function generateTrackingId() {
   const prefix = "BC";
@@ -56,23 +51,6 @@ function generateTrackingId() {
 // Middleware
 app.use(cors());
 app.use(express.json());
-
-// const verifyFBToken = async (req, res, next) => {
-//   const token = req.headers.authorization;
-//   if (!token) {
-//     return res.status(401).send({ message: "Unauthorized access" });
-//   }
-
-//   try {
-//     const idToken = token.split(" ")[1];
-//     const decodedToken = admin.auth().verifyIdToken(idToken);
-//     req.decodedEmail = decodedToken.email;
-//     next();
-//     console.log("decoded in the token.", decodedToken);
-//   } catch (error) {
-//     return res.status(401).send({ message: "Unauthorized access" });
-//   }
-// };
 
 const verifyFBToken = async (req, res, next) => {
   const token = req.headers.authorization;
