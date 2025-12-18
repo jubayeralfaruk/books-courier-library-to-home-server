@@ -46,7 +46,11 @@ const verifyFBToken = async (req, res, next) => {
 // MongoDB connection
 const uri = process.env.MONGO_URI;
 const client = new MongoClient(uri, {
-  serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
 });
 
 async function run() {
@@ -65,7 +69,8 @@ async function run() {
     const verifyAdmin = async (req, res, next) => {
       const email = req.decodedEmail; // fixed mismatch
       const user = await usersCollection.findOne({ email });
-      if (!user || user.role !== "admin") return res.status(403).send({ message: "Forbidden access" });
+      if (!user || user.role !== "admin")
+        return res.status(403).send({ message: "Forbidden access" });
       next();
     };
 
@@ -86,7 +91,8 @@ async function run() {
     app.post("/users", async (req, res) => {
       const user = req.body;
       const userExists = await usersCollection.findOne({ email: user.email });
-      if (userExists) return res.send({ exists: true, user: `userExists-${userExists}` });
+      if (userExists)
+        return res.send({ exists: true, user: `userExists-${userExists}` });
       user.role = "user";
       user.createdAt = new Date();
       const result = await usersCollection.insertOne(user);
@@ -108,7 +114,10 @@ async function run() {
     app.patch("/users/:id", verifyFBToken, async (req, res) => {
       const id = req.params.id;
       const updatedUser = req.body;
-      const result = await usersCollection.updateOne({ _id: new ObjectId(id) }, { $set: updatedUser });
+      const result = await usersCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updatedUser }
+      );
       res.send(result);
     });
 
@@ -129,7 +138,10 @@ async function run() {
       const seller_email = req.query.seller_email;
       const query = {};
       if (seller_email) query.seller_email = seller_email;
-      const books = await booksCollection.find(query).sort({ createdAt: -1 }).toArray();
+      const books = await booksCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
       res.send(books);
     });
 
@@ -142,7 +154,10 @@ async function run() {
     app.patch("/books/:id", async (req, res) => {
       const id = req.params.id;
       const updatedBook = req.body;
-      const result = await booksCollection.updateOne({ _id: new ObjectId(id) }, { $set: updatedBook });
+      const result = await booksCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updatedBook }
+      );
       res.send(result);
     });
 
@@ -150,6 +165,46 @@ async function run() {
       const id = req.params.id;
       const result = await booksCollection.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
+    });
+
+    app.get("/admin/books", async (req, res) => {
+      const books = await booksCollection
+        .find({})
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(books);
+    });
+
+    app.patch("/admin/books/:id/status", async (req, res) => {
+      const { status } = req.body;
+      const id = req.params.id;
+
+      const result = await booksCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status } }
+      );
+
+      res.send(result);
+    });
+
+    app.delete("/admin/books/:id", async (req, res) => {
+      const id = req.params.id;
+
+      // delete book
+      const bookDelete = await booksCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+
+      // delete all orders of this book
+      const orderDelete = await ordersCollection.deleteMany({
+        bookId: id,
+      });
+
+      res.send({
+        bookDeleted: bookDelete.deletedCount,
+        ordersDeleted: orderDelete.deletedCount,
+      });
     });
 
     // Orders routes
@@ -164,9 +219,13 @@ async function run() {
       const query = {};
       if (email) {
         query.email = email;
-        if (req.decodedEmail !== email) return res.status(403).send({ message: "Forbidden access" });
+        if (req.decodedEmail !== email)
+          return res.status(403).send({ message: "Forbidden access" });
       }
-      const orders = await ordersCollection.find(query).sort({ orderDate: -1 }).toArray();
+      const orders = await ordersCollection
+        .find(query)
+        .sort({ orderDate: -1 })
+        .toArray();
       res.send(orders);
     });
 
@@ -179,13 +238,18 @@ async function run() {
     app.patch("/orders/:id", async (req, res) => {
       const id = req.params.id;
       const updatedOrder = req.body;
-      const result = await ordersCollection.updateOne({ _id: new ObjectId(id) }, { $set: updatedOrder });
+      const result = await ordersCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updatedOrder }
+      );
       res.send(result);
     });
 
     app.delete("/orders/:id", async (req, res) => {
       const id = req.params.id;
-      const result = await ordersCollection.deleteOne({ _id: new ObjectId(id) });
+      const result = await ordersCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
       res.send(result);
     });
 
@@ -201,7 +265,10 @@ async function run() {
           { orderId: { $regex: search, $options: "i" } },
         ];
       }
-      const orders = await ordersCollection.find(query).sort({ createdAt: -1 }).toArray();
+      const orders = await ordersCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
       res.send(orders);
     });
 
@@ -211,9 +278,13 @@ async function run() {
       const query = {};
       if (email) {
         query.customerEmail = email;
-        if (req.decodedEmail !== email) return res.status(403).send({ message: "Forbidden access" });
+        if (req.decodedEmail !== email)
+          return res.status(403).send({ message: "Forbidden access" });
       }
-      const payments = await paymentsCollection.find(query).sort({ paymentDate: -1 }).toArray();
+      const payments = await paymentsCollection
+        .find(query)
+        .sort({ paymentDate: -1 })
+        .toArray();
       res.send(payments);
     });
 
@@ -224,7 +295,9 @@ async function run() {
           {
             price_data: {
               currency: "bdt",
-              product_data: { name: `Order Payment for this book: ${paymentInfo.bookTitle}` },
+              product_data: {
+                name: `Order Payment for this book: ${paymentInfo.bookTitle}`,
+              },
               unit_amount: paymentInfo.amount * 100,
             },
             quantity: 1,
@@ -249,14 +322,24 @@ async function run() {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
       const transactionId = session.payment_intent;
 
-      const existingPayment = await paymentsCollection.findOne({ transactionId });
+      const existingPayment = await paymentsCollection.findOne({
+        transactionId,
+      });
       if (existingPayment) {
-        return res.send({ success: true, message: "Payment already recorded", trackingId: existingPayment.trackingId, transactionId });
+        return res.send({
+          success: true,
+          message: "Payment already recorded",
+          trackingId: existingPayment.trackingId,
+          transactionId,
+        });
       }
 
       if (session.payment_status === "paid") {
         const trackingId = generateTrackingId();
-        await ordersCollection.updateOne({ _id: new ObjectId(session.metadata.orderId) }, { $set: { paymentStatus: "paid", trackingId } });
+        await ordersCollection.updateOne(
+          { _id: new ObjectId(session.metadata.orderId) },
+          { $set: { paymentStatus: "paid", trackingId } }
+        );
         const payment = {
           amount: session.amount_total / 100,
           currency: session.currency,
@@ -271,7 +354,12 @@ async function run() {
           paymentDate: new Date(),
         };
         const paymentResult = await paymentsCollection.insertOne(payment);
-        res.send({ success: true, trackingId, transactionId, paymentInfo: paymentResult });
+        res.send({
+          success: true,
+          trackingId,
+          transactionId,
+          paymentInfo: paymentResult,
+        });
       } else {
         res.status(400).send({ message: "Payment not completed" });
       }
@@ -297,9 +385,15 @@ async function run() {
     app.patch("/sellers/:id", async (req, res) => {
       const id = req.params.id;
       const updatedSeller = req.body;
-      const result = await sellersCollection.updateOne({ _id: new ObjectId(id) }, { $set: updatedSeller });
+      const result = await sellersCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updatedSeller }
+      );
       if (updatedSeller.status === "approved") {
-        await usersCollection.updateOne({ email: updatedSeller.email }, { $set: { role: "seller" } });
+        await usersCollection.updateOne(
+          { email: updatedSeller.email },
+          { $set: { role: "seller" } }
+        );
       }
       res.send(result);
     });
