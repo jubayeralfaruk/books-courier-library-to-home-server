@@ -134,14 +134,24 @@ async function run() {
       res.send(result);
     });
 
+    // app.get("/books", async (req, res) => {
+    //   const seller_email = req.query.seller_email;
+    //   const query = {};
+    //   if (seller_email) query.seller_email = seller_email;
+    //   const books = await booksCollection
+    //     .find(query)
+    //     .sort({ createdAt: -1 })
+    //     .toArray();
+    //   res.send(books);
+    // });
+
+    // ✅ USER – only published books
     app.get("/books", async (req, res) => {
-      const seller_email = req.query.seller_email;
-      const query = {};
-      if (seller_email) query.seller_email = seller_email;
       const books = await booksCollection
-        .find(query)
+        .find({ status: "published" }) // 🔐 force published
         .sort({ createdAt: -1 })
         .toArray();
+
       res.send(books);
     });
 
@@ -167,9 +177,12 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/admin/books", async (req, res) => {
+    app.get("/dashboard/books", async (req, res) => {
+      const { seller_email } = req.query;
+      const query = {};
+      if (seller_email) query.seller_email = seller_email;
       const books = await booksCollection
-        .find({})
+        .find(query)
         .sort({ createdAt: -1 })
         .toArray();
 
