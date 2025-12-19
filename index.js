@@ -158,38 +158,39 @@ async function run() {
 
     app.get("/books", async (req, res) => {
       try {
-        const { search = "", sort = "", page = 1, limit = 8 } = req.query;
+        const { search = "", sort = "latest", page = 1, limit = 8 } = req.query;
 
-        // Search condition
+        const pageNum = Number(page);
+        const limitNum = Number(limit);
+
+        // Query
         const query = {
           status: "published",
-          title: { $regex: search, $options: "i" }, // case-insensitive search
+          title: { $regex: search, $options: "i" },
         };
 
-        // Sort condition
-        let sortQuery = { createdAt: -1 }; // default (newest)
-
+        // Sort
+        let sortQuery = { createdAt: -1 }; // latest
         if (sort === "low") sortQuery = { price: 1 };
         if (sort === "high") sortQuery = { price: -1 };
-
-        const skip = (page - 1) * limit;
 
         const books = await booksCollection
           .find(query)
           .sort(sortQuery)
-          .skip(skip)
-          .limit(Number(limit))
+          .skip((pageNum - 1) * limitNum)
+          .limit(limitNum)
           .toArray();
 
         const total = await booksCollection.countDocuments(query);
 
         res.send({
           total,
-          page: Number(page),
-          limit: Number(limit),
+          page: pageNum,
+          limit: limitNum,
           books,
         });
       } catch (error) {
+        console.error(error);
         res.status(500).send({ message: "Failed to load books" });
       }
     });
@@ -317,7 +318,9 @@ async function run() {
         paymentStatus: "paid", // librarians only see paid orders
         status: { $ne: "cancelled" },
       };
-      if (status && status !== "all") {query.status = status;}
+      if (status && status !== "all") {
+        query.status = status;
+      }
       if (search) {
         query.$or = [
           { bookTitle: { $regex: search, $options: "i" } },
@@ -325,7 +328,10 @@ async function run() {
         ];
       }
 
-      const orders = await ordersCollection.find(query).sort({ orderDate: -1 }).toArray();
+      const orders = await ordersCollection
+        .find(query)
+        .sort({ orderDate: -1 })
+        .toArray();
 
       res.send(orders);
     });
