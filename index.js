@@ -477,10 +477,15 @@ async function run() {
       res.send(result);
     });
 
-    app.delete("/wishlist/:id", async (req, res) => {
-      const id = req.params.id;
+    app.delete("/wishlist", async (req, res) => {
+      // const id = req.params.id;
+      const { user_email, bookId } = req.body;
+      // const result = await wishlistCollection.deleteOne({
+      //   _id: new ObjectId(id),
+      // });
       const result = await wishlistCollection.deleteOne({
-        _id: new ObjectId(id),
+        user_email,
+        bookId,
       });
       res.send(result);
     });
