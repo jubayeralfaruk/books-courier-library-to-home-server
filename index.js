@@ -267,11 +267,11 @@ async function run() {
     });
 
     app.get("/orders", verifyFBToken, async (req, res) => {
-      const email = req.query.email;
+      const user_email = req.query.user_email;
       const query = {};
-      if (email) {
-        query.email = email;
-        if (req.decodedEmail !== email)
+      if (user_email) {
+        query.user_email = user_email;
+        if (req.decodedEmail !== user_email)
           return res.status(403).send({ message: "Forbidden access" });
       }
       const orders = await ordersCollection
