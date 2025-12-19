@@ -147,13 +147,51 @@ async function run() {
     // });
 
     // ✅ USER – only published books
-    app.get("/books", async (req, res) => {
-      const books = await booksCollection
-        .find({ status: "published" }) // 🔐 force published
-        .sort({ createdAt: -1 })
-        .toArray();
+    // app.get("/books", async (req, res) => {
+    //   const books = await booksCollection
+    //     .find({ status: "published" }) // 🔐 force published
+    //     .sort({ createdAt: -1 })
+    //     .toArray();
 
-      res.send(books);
+    //   res.send(books);
+    // });
+
+    app.get("/books", async (req, res) => {
+      try {
+        const { search = "", sort = "", page = 1, limit = 8 } = req.query;
+
+        // Search condition
+        const query = {
+          status: "published",
+          title: { $regex: search, $options: "i" }, // case-insensitive search
+        };
+
+        // Sort condition
+        let sortQuery = { createdAt: -1 }; // default (newest)
+
+        if (sort === "low") sortQuery = { price: 1 };
+        if (sort === "high") sortQuery = { price: -1 };
+
+        const skip = (page - 1) * limit;
+
+        const books = await booksCollection
+          .find(query)
+          .sort(sortQuery)
+          .skip(skip)
+          .limit(Number(limit))
+          .toArray();
+
+        const total = await booksCollection.countDocuments(query);
+
+        res.send({
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          books,
+        });
+      } catch (error) {
+        res.status(500).send({ message: "Failed to load books" });
+      }
     });
 
     app.get("/books/:id", async (req, res) => {
@@ -446,7 +484,6 @@ async function run() {
       });
       res.send(result);
     });
-    
   } catch (error) {
     console.error(error);
   }
