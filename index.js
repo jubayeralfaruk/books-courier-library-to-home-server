@@ -61,8 +61,9 @@ async function run() {
     const booksCollection = db.collection("books");
     const ordersCollection = db.collection("orders");
     const paymentsCollection = db.collection("payments");
-    const reviewsCollection = db.collection("reviews");
     const sellersCollection = db.collection("sellers");
+    const reviewsCollection = db.collection("reviews");
+    const wishlistCollection = db.collection("wishlist");
 
     console.log("Connected to MongoDB");
 
@@ -410,6 +411,42 @@ async function run() {
       }
       res.send(result);
     });
+
+    app.post("/wishlist", async (req, res) => {
+      const wishlist = req.body;
+
+      const exists = await wishlistCollection.findOne({
+        user_email: wishlist.user_email,
+        bookId: wishlist.bookId,
+      });
+
+      if (exists) {
+        return res.status(409).send({ message: "Already in wishlist" });
+      }
+
+      wishlist.createdAt = new Date();
+      const result = await wishlistCollection.insertOne(wishlist);
+      res.send(result);
+    });
+
+    app.get("/wishlist", async (req, res) => {
+      const email = req.query.email;
+      const result = await wishlistCollection
+        .find({ user_email: email })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(result);
+    });
+
+    app.delete("/wishlist/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await wishlistCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
+    });
+    
   } catch (error) {
     console.error(error);
   }
