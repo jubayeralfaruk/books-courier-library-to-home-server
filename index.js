@@ -307,21 +307,38 @@ async function run() {
 
     // Seller Orders
     app.get("/seller-orders", async (req, res) => {
-      const { search, status } = req.query;
-      const query = { status: { $ne: "cancelled" } };
-      if (status && status !== "all") query.status = status;
+      const { seller_email, search, status } = req.query;
+
+      if (!seller_email) {
+        return res.status(400).send({ message: "Seller email required" });
+      }
+      const query = {
+        seller_email, // 🔐 only seller's orders
+        paymentStatus: "paid", // librarians only see paid orders
+        status: { $ne: "cancelled" },
+      };
+      if (status && status !== "all") {query.status = status;}
       if (search) {
         query.$or = [
-          { productName: { $regex: search, $options: "i" } },
-          { customerEmail: { $regex: search, $options: "i" } },
-          { orderId: { $regex: search, $options: "i" } },
+          { bookTitle: { $regex: search, $options: "i" } },
+          { user_email: { $regex: search, $options: "i" } },
         ];
       }
-      const orders = await ordersCollection
-        .find(query)
-        .sort({ createdAt: -1 })
-        .toArray();
+
+      const orders = await ordersCollection.find(query).sort({ orderDate: -1 }).toArray();
+
       res.send(orders);
+    });
+
+    app.patch("/seller-orders/:id", async (req, res) => {
+      const { status } = req.body;
+
+      const result = await ordersCollection.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        { $set: { status } }
+      );
+
+      res.send(result);
     });
 
     // Payments
