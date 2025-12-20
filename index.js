@@ -514,23 +514,42 @@ async function run() {
     });
 
     app.post("/reviews", async (req, res) => {
-      const wishlist = req.body;
-      wishlist.createdAt = new Date();
-      const result = await wishlistCollection.insertOne(wishlist);
-      res.send(result);
+      try {
+        const { user_name, user_image, user_email, rating, review, bookId, orderId,} = req.body;
+        // Validation
+        if (!user_email || !rating || !review || !bookId || !orderId) {
+          return res.status(400).send({ message: "Missing required fields" });
+        }
+        // Prevent duplicate review per order
+        const existingReview = await reviewsCollection.findOne({
+          orderId,
+        });
+        if (existingReview) {
+          return res.status(409).send({ message: "Review already exists" });
+        }
+        const reviewDoc = { user_name, user_image, user_email, rating, review, bookId, orderId, createdAt: new Date(), };
+
+        const result = await reviewsCollection.insertOne(reviewDoc);
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Failed to submit review" });
+      }
     });
 
     app.get("/reviews", async (req, res) => {
-      const bookId = req.query.bookId;
-      const query = {}
-      if (bookId) {
-        query.bookId = bookId
+      const orderId = req.query.orderId;
+      const query = {};
+      if (orderId) {
+        query.orderId = orderId;
       }
-      const result = await reviewsCollection.find(query).sort({ createdAt: -1 }).toArray();
+      const result = await reviewsCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
 
       res.send(result);
     });
-
   } catch (error) {
     console.error(error);
   }
