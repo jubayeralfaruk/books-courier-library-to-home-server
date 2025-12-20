@@ -528,7 +528,6 @@ async function run() {
           return res.status(409).send({ message: "Review already exists" });
         }
         const reviewDoc = { user_name, user_image, user_email, rating, review, bookId, orderId, createdAt: new Date(), };
-
         const result = await reviewsCollection.insertOne(reviewDoc);
         res.send(result);
       } catch (error) {
@@ -538,15 +537,16 @@ async function run() {
     });
 
     app.get("/reviews", async (req, res) => {
+      const bookId = req.query.bookId;
       const orderId = req.query.orderId;
       const query = {};
+      if (bookId) {
+        query.bookId = bookId;
+      }
       if (orderId) {
         query.orderId = orderId;
       }
-      const result = await reviewsCollection
-        .find(query)
-        .sort({ createdAt: -1 })
-        .toArray();
+      const result = await reviewsCollection.find(query).sort({ createdAt: -1 }).toArray();
 
       res.send(result);
     });
