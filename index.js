@@ -512,6 +512,25 @@ async function run() {
       });
       res.send(result);
     });
+
+    app.post("/reviews", async (req, res) => {
+      const wishlist = req.body;
+      wishlist.createdAt = new Date();
+      const result = await wishlistCollection.insertOne(wishlist);
+      res.send(result);
+    });
+
+    app.get("/reviews", async (req, res) => {
+      const bookId = req.query.bookId;
+      const query = {}
+      if (bookId) {
+        query.bookId = bookId
+      }
+      const result = await reviewsCollection.find(query).sort({ createdAt: -1 }).toArray();
+
+      res.send(result);
+    });
+
   } catch (error) {
     console.error(error);
   }
