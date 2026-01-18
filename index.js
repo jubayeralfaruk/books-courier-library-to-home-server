@@ -174,6 +174,12 @@ async function run() {
         if (sort === "low") sortQuery = { price: 1 };
         if (sort === "high") sortQuery = { price: -1 };
 
+        // Rating filter can be added here if needed
+        const rating = req.query.rating;
+        if (rating) {
+          query.averageRating = { $gte: Number(rating) };
+        }
+
         const books = await booksCollection
           .find(query)
           .sort(sortQuery)
