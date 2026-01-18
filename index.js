@@ -156,30 +156,113 @@ async function run() {
     //   res.send(books);
     // });
 
+    // app.get("/books", async (req, res) => {
+    //   try {
+    //     const { search = "", sort = "latest", page = 1, limit = 8 } = req.query;
+
+    //     const pageNum = Number(page);
+    //     const limitNum = Number(limit);
+
+    //     // Query
+    //     const query = {
+    //       status: "published",
+    //       title: { $regex: search, $options: "i" },
+    //     };
+
+    //     // Sort
+    //     let sortQuery = { createdAt: -1 }; // latest
+    //     if (sort === "low") sortQuery = { price: 1 };
+    //     if (sort === "high") sortQuery = { price: -1 };
+
+    //     // Rating filter can be added here if needed
+    //     const rating = req.query.rating;
+    //     if (rating) {
+    //       query.averageRating = { $gte: Number(rating) };
+    //     }
+
+    //     const books = await booksCollection
+    //       .find(query)
+    //       .sort(sortQuery)
+    //       .skip((pageNum - 1) * limitNum)
+    //       .limit(limitNum)
+
+    //       .toArray();
+
+    //     const total = await booksCollection.countDocuments(query);
+
+    //     res.send({
+    //       total,
+    //       page: pageNum,
+    //       limit: limitNum,
+    //       books,
+    //     });
+    //   } catch (error) {
+    //     console.error(error);
+    //     res.status(500).send({ message: "Failed to load books" });
+    //   }
+    // });
+
     app.get("/books", async (req, res) => {
       try {
-        const { search = "", sort = "latest", page = 1, limit = 8 } = req.query;
+        const {
+          search = "",
+          sort = "latest",
+          page = 1,
+          limit = 8,
+          category = "",
+          rating = "",
+          minPrice = "",
+          maxPrice = "",
+          author = "",
+        } = req.query;
 
         const pageNum = Number(page);
         const limitNum = Number(limit);
 
-        // Query
+        // Build query object
         const query = {
           status: "published",
-          title: { $regex: search, $options: "i" },
         };
 
-        // Sort
-        let sortQuery = { createdAt: -1 }; // latest
-        if (sort === "low") sortQuery = { price: 1 };
-        if (sort === "high") sortQuery = { price: -1 };
+        // Search in title and author
+        if (search) {
+          query.$or = [
+            { title: { $regex: search, $options: "i" } },
+            { author: { $regex: search, $options: "i" } },
+          ];
+        }
 
-        // Rating filter can be added here if needed
-        const rating = req.query.rating;
+        // Category filter
+        if (category) {
+          query.category = category;
+        }
+
+        // Author filter
+        if (author) {
+          query.author = { $regex: author, $options: "i" };
+        }
+
+        // Rating filter
         if (rating) {
           query.averageRating = { $gte: Number(rating) };
         }
 
+        // Price range filter
+        if (minPrice || maxPrice) {
+          query.price = {};
+          if (minPrice) query.price.$gte = Number(minPrice);
+          if (maxPrice) query.price.$lte = Number(maxPrice);
+        }
+
+        // Sort options
+        let sortQuery = { createdAt: -1 }; // latest (default)
+        if (sort === "low") sortQuery = { price: 1 };
+        if (sort === "high") sortQuery = { price: -1 };
+        if (sort === "rating") sortQuery = { averageRating: -1 };
+        if (sort === "title") sortQuery = { title: 1 };
+        if (sort === "popular") sortQuery = { totalSales: -1 };
+
+        // Execute query with pagination
         const books = await booksCollection
           .find(query)
           .sort(sortQuery)
@@ -190,14 +273,20 @@ async function run() {
         const total = await booksCollection.countDocuments(query);
 
         res.send({
+          success: true,
           total,
           page: pageNum,
           limit: limitNum,
+          totalPages: Math.ceil(total / limitNum),
           books,
         });
       } catch (error) {
-        console.error(error);
-        res.status(500).send({ message: "Failed to load books" });
+        console.error("Error fetching books:", error);
+        res.status(500).send({
+          success: false,
+          message: "Failed to load books",
+          error: error.message,
+        });
       }
     });
 
@@ -521,7 +610,15 @@ async function run() {
 
     app.post("/reviews", async (req, res) => {
       try {
-        const { user_name, user_image, user_email, rating, review, bookId, orderId,} = req.body;
+        const {
+          user_name,
+          user_image,
+          user_email,
+          rating,
+          review,
+          bookId,
+          orderId,
+        } = req.body;
         // Validation
         if (!user_email || !rating || !review || !bookId || !orderId) {
           return res.status(400).send({ message: "Missing required fields" });
@@ -533,7 +630,16 @@ async function run() {
         if (existingReview) {
           return res.status(409).send({ message: "Review already exists" });
         }
-        const reviewDoc = { user_name, user_image, user_email, rating, review, bookId, orderId, createdAt: new Date(), };
+        const reviewDoc = {
+          user_name,
+          user_image,
+          user_email,
+          rating,
+          review,
+          bookId,
+          orderId,
+          createdAt: new Date(),
+        };
         const result = await reviewsCollection.insertOne(reviewDoc);
         res.send(result);
       } catch (error) {
@@ -552,7 +658,10 @@ async function run() {
       if (orderId) {
         query.orderId = orderId;
       }
-      const result = await reviewsCollection.find(query).sort({ createdAt: -1 }).toArray();
+      const result = await reviewsCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
 
       res.send(result);
     });
